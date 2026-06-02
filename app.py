@@ -1,10 +1,10 @@
 import streamlit as st
 import pandas as pd
 
-from utils.geocoder import get_coordinates
-from utils.emergency_services import get_nearby_services
-from utils.routing import get_route
-from utils.map_utils import create_map, display_map
+from geocoder import get_coordinates
+from emergency_services import get_nearby_services
+from routing import get_route
+from map_utils import create_map, display_map
 
 st.set_page_config(
     page_title="QuickAid",
