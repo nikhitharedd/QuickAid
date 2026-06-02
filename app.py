@@ -1,4 +1,3 @@
-```python
 import streamlit as st
 import pandas as pd
 
@@ -166,4 +165,3 @@ if "services" in st.session_state:
     )
 
     display_map(m)
-```
