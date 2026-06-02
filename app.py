@@ -1,167 +1,67 @@
 import streamlit as st
-import pandas as pd
+import folium
+import requests
+from streamlit_folium import st_folium
 
-from utils.geocoder import get_coordinates
-from utils.emergency_services import get_nearby_services
-from utils.routing import get_route
-from utils.map_utils import create_map, display_map
+st.title("🚑 Emergency Help Locator")
 
-st.set_page_config(
-    page_title="QuickAid",
-    page_icon="🚑",
-    layout="wide"
-)
+# Default location (you can change)
+default_lat = 17.4401
+default_lon = 78.3489
 
-st.title("🚑 QuickAid")
-st.subheader("Emergency Help Locator")
+lat = st.number_input("Latitude", value=default_lat)
+lon = st.number_input("Longitude", value=default_lon)
 
-location = st.text_input(
-    "Enter Location",
-    placeholder="e.g. Gachibowli, Hyderabad"
-)
-
-service_type = st.selectbox(
+# Emergency type selection
+place_type = st.selectbox(
     "Select Emergency Service",
-    ["Hospital", "Police Station", "Fire Station", "Pharmacy"]
+    ["hospital", "police", "fire_station", "shelter"]
 )
 
-service_map = {
-    "Hospital": "hospital",
-    "Police Station": "police",
-    "Fire Station": "fire station",
-    "Pharmacy": "pharmacy"
-}
+# Overpass API query function
+def get_places(lat, lon, place):
+    query = f"""
+    [out:json];
+    node
+      ["amenity"="{place}"]
+      (around:3000,{lat},{lon});
+    out;
+    """
 
-if st.button("Find Nearby Services"):
+    url = "https://overpass-api.de/api/interpreter"
+    response = requests.get(url, params={'data': query})
+    data = response.json()
 
-    lat, lon = get_coordinates(location)
+    places = []
+    for element in data["elements"]:
+        name = element.get("tags", {}).get("name", "Unknown")
+        plat = element["lat"]
+        plon = element["lon"]
+        places.append((name, plat, plon))
 
-    if lat is None or lon is None:
-        st.error("Location not found.")
-        st.stop()
+    return places
 
-    services = get_nearby_services(
-        lat,
-        lon,
-        service_map[service_type]
-    )
+# Get places
+places = get_places(lat, lon, place_type)
 
-    if not services:
-        st.warning("No nearby services found.")
-        st.stop()
+# Create map
+m = folium.Map(location=[lat, lon], zoom_start=14)
 
-    services = sorted(
-        services,
-        key=lambda x: x["distance"]
-    )
+# User marker
+folium.Marker(
+    [lat, lon],
+    tooltip="You are here",
+    icon=folium.Icon(color="blue")
+).add_to(m)
 
-    st.session_state["lat"] = lat
-    st.session_state["lon"] = lon
-    st.session_state["services"] = services
+# Add emergency places
+for name, plat, plon in places:
+    folium.Marker(
+        [plat, plon],
+        tooltip=name,
+        icon=folium.Icon(color="red")
+    ).add_to(m)
 
-if "services" in st.session_state:
+st.write(f"Found {len(places)} nearby {place_type}s")
 
-    st.success(
-        f"📍 Your Location: "
-        f"{st.session_state['lat']:.5f}, "
-        f"{st.session_state['lon']:.5f}"
-    )
-
-    st.markdown("## 🏥 Select Service")
-
-    service_names = [
-        service["name"]
-        for service in st.session_state["services"]
-    ]
-
-    selected_name = st.selectbox(
-        "Choose Service",
-        service_names
-    )
-
-    selected_service = next(
-        service
-        for service in st.session_state["services"]
-        if service["name"] == selected_name
-    )
-
-    route = get_route(
-        st.session_state["lat"],
-        st.session_state["lon"],
-        selected_service["lat"],
-        selected_service["lon"]
-    )
-
-    google_maps_url = (
-        f"https://www.google.com/maps/dir/"
-        f"{st.session_state['lat']},"
-        f"{st.session_state['lon']}/"
-        f"{selected_service['lat']},"
-        f"{selected_service['lon']}"
-    )
-
-    st.markdown("## 🏆 Selected Service")
-
-    st.success(
-        f"""
-🏥 {selected_service['name']}
-
-📍 Distance: {selected_service['distance']} km
-
-⏱ Estimated Time: {route['duration_min']} min
-"""
-    )
-
-    st.link_button(
-        "🗺 Open Directions in Google Maps",
-        google_maps_url
-    )
-
-    if route:
-        st.info(
-            f"🚗 Travel Distance: {route['distance_km']} km | "
-            f"⏱ Estimated Time: {route['duration_min']} min"
-        )
-
-    st.markdown("## 📋 Nearby Services")
-
-    table_data = []
-
-    for service in st.session_state["services"]:
-
-        service_route = get_route(
-            st.session_state["lat"],
-            st.session_state["lon"],
-            service["lat"],
-            service["lon"]
-        )
-
-        table_data.append({
-            "Name": service["name"],
-            "Distance (km)": service["distance"],
-            "Estimated Time (min)": (
-                service_route["duration_min"]
-                if service_route else "N/A"
-            ),
-            "Latitude": round(service["lat"], 5),
-            "Longitude": round(service["lon"], 5)
-        })
-
-    df = pd.DataFrame(table_data)
-
-    st.dataframe(
-        df,
-        use_container_width=True,
-        hide_index=True
-    )
-
-    st.markdown("## 🗺 Route Map")
-
-    m = create_map(
-        st.session_state["lat"],
-        st.session_state["lon"],
-        services=st.session_state["services"],
-        route=route
-    )
-
-    display_map(m)
+st_folium(m, width=700, height=500)
