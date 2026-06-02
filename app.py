@@ -1,10 +1,11 @@
+```python
 import streamlit as st
 import pandas as pd
 
-from geocoder import get_coordinates
-from emergency_services import get_nearby_services
-from routing import get_route
-from map_utils import create_map, display_map
+from utils.geocoder import get_coordinates
+from utils.emergency_services import get_nearby_services
+from utils.routing import get_route
+from utils.map_utils import create_map, display_map
 
 st.set_page_config(
     page_title="QuickAid",
@@ -108,7 +109,7 @@ if "services" in st.session_state:
 
 📍 Distance: {selected_service['distance']} km
 
-📞 Hospital Number: {selected_service['phone']}
+⏱ Estimated Time: {route['duration_min']} min
 """
     )
 
@@ -129,10 +130,20 @@ if "services" in st.session_state:
 
     for service in st.session_state["services"]:
 
+        service_route = get_route(
+            st.session_state["lat"],
+            st.session_state["lon"],
+            service["lat"],
+            service["lon"]
+        )
+
         table_data.append({
             "Name": service["name"],
             "Distance (km)": service["distance"],
-            "Hospital Number": service["phone"],
+            "Estimated Time (min)": (
+                service_route["duration_min"]
+                if service_route else "N/A"
+            ),
             "Latitude": round(service["lat"], 5),
             "Longitude": round(service["lon"], 5)
         })
@@ -155,3 +166,4 @@ if "services" in st.session_state:
     )
 
     display_map(m)
+```
